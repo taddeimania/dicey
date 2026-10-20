@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.22)
 
-# Apple silicon, macOS 11+. Set before project().
+# macOS 11+. Builds for the machine you're on by default; for a universal
+# binary pass -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64". Set before project().
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version")
-set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "Build architectures")
 
 project(Dicey VERSION 0.1.0 LANGUAGES C CXX)
 
@@ -26,6 +26,18 @@ else()
 endif()
 
 # --- Plugin -------------------------------------------------------------------
+# Copy the built plugin into the system VST3 folder after each build:
+#   macOS   ~/Library/Audio/Plug-Ins/VST3
+#   Linux   ~/.vst3
+#   Windows C:\Program Files\Common Files\VST3  (needs an administrator shell,
+#           so it is off by default there)
+if(WIN32)
+    set(_dicey_copy_default OFF)
+else()
+    set(_dicey_copy_default ON)
+endif()
+option(DICEY_COPY_PLUGIN "Install the plugin into the system VST3 folder after building" ${_dicey_copy_default})
+
 juce_add_plugin(Dicey
     COMPANY_NAME                "Taddei"
     BUNDLE_ID                   com.taddei.dicey
@@ -39,7 +51,7 @@ juce_add_plugin(Dicey
     IS_MIDI_EFFECT              FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
     VST3_CATEGORIES             Instrument Generator
-    COPY_PLUGIN_AFTER_BUILD     TRUE)   # installs to ~/Library/Audio/Plug-Ins/VST3
+    COPY_PLUGIN_AFTER_BUILD     ${DICEY_COPY_PLUGIN})
 
 target_sources(Dicey PRIVATE
     Source/PluginProcessor.cpp
