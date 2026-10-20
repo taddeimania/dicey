@@ -118,6 +118,37 @@ ctest --test-dir build -C Release --output-on-failure
 Pass any of these at configure time, for example
 `cmake -B build -DDICEY_JUCE_DIR=/path/to/JUCE`.
 
+### Building in the cloud (GitHub Actions)
+
+`.github/workflows/build.yml` builds the plugin on GitHub's machines. It's the
+easy way to get a Windows build from a Mac. It only runs when you start it:
+
+1. Push the repo to GitHub.
+2. Go to the **Actions** tab, choose **Build plugin**, then **Run workflow**.
+3. Tick the platforms you want and press **Run workflow**.
+4. When the run finishes, open it. The plugins are listed under **Artifacts**
+   at the bottom of the summary page, and GitHub keeps them for 30 days.
+
+Each platform takes several minutes, and the first run takes a little longer
+while it downloads JUCE. Public repos build for free; private repos use the
+build minutes included with your GitHub plan.
+
+To install a downloaded build:
+
+- **Windows**: unzip it and copy the `Dicey.vst3` folder into
+  `C:\Program Files\Common Files\VST3`.
+- **macOS**: unzip it, move `Dicey.vst3` into `~/Library/Audio/Plug-Ins/VST3`,
+  then run:
+
+  ```sh
+  xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/Dicey.vst3
+  ```
+
+  macOS marks downloaded plugins as quarantined, and the build isn't signed
+  with an Apple developer certificate, so without this step the DAW refuses
+  to load it.
+- **Linux**: `tar -xzf Dicey-*.tar.gz -C ~/.vst3`
+
 ## Using it in Live
 
 1. **Preferences → Plug-Ins** (on Windows, **Options → Preferences →
@@ -206,6 +237,7 @@ Every control can be automated from Live.
 ## Layout
 
 ```
+.github/workflows/build.yml  on-demand cloud builds for Windows, macOS and Linux
 Source/Engine/DiceEngine.h   the generator and scheduler (pure C++, unit tested)
 Source/PluginProcessor.*     parameters, Live transport, MIDI out, test tone, state
 Source/PluginEditor.*        the panel

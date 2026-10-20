@@ -1,0 +1,128 @@
+# Builds the Dicey VST3 on demand.
+#
+# Run it from GitHub: Actions tab -> "Build plugin" -> "Run workflow",
+# tick the platforms you want, and press the green button. When it finishes,
+# the plugins are listed as downloads at the bottom of the run's summary page.
+
+name: Build plugin
+
+on:
+  workflow_dispatch:
+    inputs:
+      windows:
+        description: "Windows (x64)"
+        type: boolean
+        default: true
+      macos:
+        description: "macOS (universal: Apple silicon + Intel)"
+        type: boolean
+        default: false
+      linux:
+        description: "Linux (x64)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  JUCE_VERSION: "8.0.9"
+
+jobs:
+  # Turn the ticked boxes into a build matrix.
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - id: plan
+        shell: bash
+        run: |
+          entries=()
+          if [ "${{ inputs.windows }}" = "true" ]; then entries+=('{"platform":"Windows","os":"windows-latest"}'); fi
+          if [ "${{ inputs.macos }}" = "true" ];   then entries+=('{"platform":"macOS","os":"macos-latest"}'); fi
+          if [ "${{ inputs.linux }}" = "true" ];   then entries+=('{"platform":"Linux","os":"ubuntu-latest"}'); fi
+          if [ ${#entries[@]} -eq 0 ]; then
+            echo "::error::Tick at least one platform."
+            exit 1
+          fi
+          joined=$(IFS=,; echo "${entries[*]}")
+          echo "matrix={\"include\":[${joined}]}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: plan
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # JUCE is about 100 MB; keep a copy between runs instead of downloading it every time.
+      - name: Restore JUCE
+        id: juce-cache
+        uses: actions/cache@v6
+        with:
+          path: .juce
+          key: juce-${{ env.JUCE_VERSION }}-${{ runner.os }}
+
+      - name: Download JUCE
+        if: steps.juce-cache.outputs.cache-hit != 'true'
+        run: git clone --depth 1 --branch "$JUCE_VERSION" https://github.com/juce-framework/JUCE.git .juce
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libasound2-dev libfreetype-dev libfontconfig1-dev libgl1-mesa-dev \
+            libx11-dev libxcomposite-dev libxcursor-dev libxext-dev \
+            libxinerama-dev libxrandr-dev libxrender-dev
+
+      - name: Configure
+        run: |
+          extra=()
+          case "$RUNNER_OS" in
+            Windows) extra+=(-A x64) ;;
+            macOS)   extra+=("-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64") ;;
+          esac
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DDICEY_COPY_PLUGIN=OFF \
+            -DDICEY_JUCE_DIR=.juce \
+            "${extra[@]}"
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 4
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      # Package the .vst3 ourselves so file permissions and the macOS code
+      # signature survive the download.
+      - name: Package
+        run: |
+          version=$(sed -n 's/^project(Dicey VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          name="Dicey-${version}-${{ matrix.platform }}-${GITHUB_SHA::7}"
+          cd build/Dicey_artefacts/Release/VST3
+          case "$RUNNER_OS" in
+            Windows) 7z a -tzip "$GITHUB_WORKSPACE/$name.zip" Dicey.vst3 > /dev/null
+                     echo "ARCHIVE=$name.zip" >> "$GITHUB_ENV" ;;
+            macOS)   ditto -c -k --sequesterRsrc --keepParent Dicey.vst3 "$GITHUB_WORKSPACE/$name.zip"
+                     echo "ARCHIVE=$name.zip" >> "$GITHUB_ENV" ;;
+            Linux)   tar -czf "$GITHUB_WORKSPACE/$name.tar.gz" Dicey.vst3
+                     echo "ARCHIVE=$name.tar.gz" >> "$GITHUB_ENV" ;;
+          esac
+
+      - name: Upload
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ env.ARCHIVE }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 30
