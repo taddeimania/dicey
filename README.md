@@ -1,13 +1,39 @@
 # Dicey
 
-A stochastic melody and rhythm generator for Ableton Live. It sends monophonic
-MIDI to any instrument and follows Live's transport and tempo.
+A stochastic melody and rhythm generator for any DAW that hosts VST3 plugins.
+It sends monophonic MIDI to any instrument and follows your DAW's transport and
+tempo.
 
 ![The Dicey panel](docs/dicey_screenshot.png)
 
 A personal project: a VST3 plugin for macOS, Windows and Linux.
 
+## Download
+
+You don't need to build Dicey yourself. Ready-made plugins for Windows, macOS
+and Linux are on the [Releases page](https://github.com/taddeimania/dicer/releases).
+Download the file for your system from the latest release, then:
+
+- **Windows**: unzip it and copy the `Dicey.vst3` folder into
+  `C:\Program Files\Common Files\VST3`.
+- **macOS**: unzip it, move `Dicey.vst3` into `~/Library/Audio/Plug-Ins/VST3`,
+  then run:
+
+  ```sh
+  xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/Dicey.vst3
+  ```
+
+  macOS marks downloaded plugins as quarantined, and the build isn't signed
+  with an Apple developer certificate, so without this step the DAW refuses
+  to load it.
+- **Linux**: `tar -xzf Dicey-*.tar.gz -C ~/.vst3`
+
+Then rescan plug-ins in your DAW. [Using it in a DAW](#using-it-in-a-daw)
+covers the rest.
+
 ## Building
+
+To build from source instead, read on.
 
 The project is self-contained. CMake downloads JUCE 8.0.9, which includes the
 VST3 SDK, the first time you configure, so there's nothing else to fetch by hand.
@@ -134,23 +160,22 @@ Each platform takes several minutes, and the first run takes a little longer
 while it downloads JUCE. Public repos build for free; private repos use the
 build minutes included with your GitHub plan.
 
-To install a downloaded build:
+Install the downloads the same way as a release; see [Download](#download).
 
-- **Windows**: unzip it and copy the `Dicey.vst3` folder into
-  `C:\Program Files\Common Files\VST3`.
-- **macOS**: unzip it, move `Dicey.vst3` into `~/Library/Audio/Plug-Ins/VST3`,
-  then run:
+## Using it in a DAW
 
-  ```sh
-  xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/Dicey.vst3
-  ```
+Dicey is a VST3 *instrument* that outputs MIDI rather than sound, apart from
+its built-in test tone. Your DAW needs to be able to:
 
-  macOS marks downloaded plugins as quarantined, and the build isn't signed
-  with an Apple developer certificate, so without this step the DAW refuses
-  to load it.
-- **Linux**: `tar -xzf Dicey-*.tar.gz -C ~/.vst3`
+- load VST3 instruments, and
+- route an instrument plugin's MIDI output to another track.
 
-## Using it in Live
+Ableton Live, Bitwig Studio, REAPER and Cubase can all do this, among others.
+Logic Pro, GarageBand and Pro Tools can't load VST3 plugins.
+
+Dicey only runs while your DAW's transport is playing.
+
+### Ableton Live
 
 1. **Preferences → Plug-Ins** (on Windows, **Options → Preferences →
    Plug-Ins**): turn on *Use VST3 Plug-in System Folders*, then rescan. Dicey
@@ -162,7 +187,28 @@ To install a downloaded build:
    and **Monitor** to **In**.
 4. Switch the test tone off with button **C**.
 
-Dicey only runs while Live's transport is playing.
+To layer several synths on the same Dicey, repeat step 3 for each synth track.
+Set each one's Monitor to **In**; arming a track is only needed for recording.
+
+### Other DAWs
+
+The recipe is the same everywhere:
+
+1. Put Dicey on an instrument track.
+2. Route that track's MIDI output to the track with your synth.
+3. Switch Dicey's test tone off with button **C**.
+
+The routing step is where DAWs differ, and the exact menu names vary between
+versions:
+
+- **REAPER**: add a send from the Dicey track to the synth track, with audio
+  set to *None* and MIDI set to *All*.
+- **Bitwig Studio**: set the synth track's input to the Dicey track.
+- **Cubase**: create a MIDI track for your synth and set its input to Dicey's
+  MIDI output.
+
+If your DAW isn't listed, look in its manual for routing MIDI output from a
+plugin.
 
 ## Controls
 
@@ -187,7 +233,7 @@ Dicey only runs while Live's transport is playing.
 - **Hold** for realtime mode: the LED goes dark and every pass through the loop
   gets new values.
 - **Click again** to return to the dice you had before.
-- The dice are saved with your Live set.
+- The dice are saved with your project.
 
 **LOCK**: keeps playing the current pattern while you move the controls. Release
 it to apply the changes.
@@ -218,14 +264,14 @@ pattern a step is one beat.
 - **LEVEL**: the test tone's volume.
 - **OCTAVE**, **ROOT** and MIDI **CHANNEL**.
 
-Every control can be automated from Live.
+Every control can be automated from your DAW.
 
 ## Behaviour notes
 
-- Dicey follows Live's transport and tempo. It has no clock of its own and only
-  runs while Live is playing.
-- Every parameter can be automated or MIDI-mapped in Live.
-- Live sets and presets keep the full state, including the dice.
+- Dicey follows the host's transport and tempo. It has no clock of its own and
+  only runs while the DAW is playing.
+- Every parameter can be automated or MIDI-mapped from the host.
+- Projects and presets keep the full state, including the dice.
 - Realtime mode is deterministic for a given song position, so bouncing the same
   section twice gives the same notes.
 
@@ -234,7 +280,7 @@ Every control can be automated from Live.
 ```
 .github/workflows/build.yml  on-demand cloud builds for Windows, macOS and Linux
 Source/Engine/DiceEngine.h   the generator and scheduler (pure C++, unit tested)
-Source/PluginProcessor.*     parameters, Live transport, MIDI out, test tone, state
+Source/PluginProcessor.*     parameters, host transport, MIDI out, test tone, state
 Source/PluginEditor.*        the panel
 Source/UI/Widgets.*          knobs, faders, buttons, LEDs, step ring, table
 Tests/EngineTests.cpp        engine tests
