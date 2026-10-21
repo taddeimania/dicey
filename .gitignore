@@ -18,8 +18,9 @@ install_manifest.txt
 compile_commands.json
 /Makefile
 
-# JUCE downloaded by FetchContent, and Projucer-generated code
+# JUCE: downloaded by FetchContent, the CI checkout, and Projucer-generated code
 _deps/
+.juce/
 JuceLibraryCode/
 Builds/
 

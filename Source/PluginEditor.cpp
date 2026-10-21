@@ -345,7 +345,7 @@ void DiceyPanel::timerCallback()
     toneLed.setLevel (getParam (ids::testTone) > 0.5f ? 1.0f : 0.0f);
     diceBothLed.setLevel (diceFlash);
 
-    // DICE LEDs: lit in dice mode, dark in realtime (as on the hardware).
+    // DICE LEDs: lit in dice mode, dark in realtime.
     const bool rRT = getParam (ids::rhythmRealtime) > 0.5f;
     const bool mRT = getParam (ids::melodyRealtime) > 0.5f;
     rhythmLed.setLevel (rRT ? 0.0f : jmax (0.75f, rhythmFlash));

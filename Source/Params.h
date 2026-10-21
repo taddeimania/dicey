@@ -106,7 +106,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::rhythmRealtime, 1 }, "Rhythm Realtime", false));
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::melodyRealtime, 1 }, "Melody Realtime", false));
 
-    // Values VARIATION may introduce (hardware default: no triplets, no 1/32)
+    // Values VARIATION may introduce (default: no triplets, no 1/32)
     const Params defaults;
     for (int i = 0; i < kNumValues; ++i)
         layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::varAllowed (i), 1 },

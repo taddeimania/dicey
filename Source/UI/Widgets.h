@@ -163,7 +163,7 @@ private:
 };
 
 // ---------------------------------------------------------------------------
-// Options table (replaces the hardware's EDIT parameter list)
+// Options table: mute mode, VARIATION values, scale presets, pattern length
 // ---------------------------------------------------------------------------
 class OptionTable final : public juce::Component, public juce::SettableTooltipClient
 {

@@ -1,35 +1,160 @@
 # Dicey
 
-A stochastic melody and rhythm generator for Ableton Live, after the Vermona
-meloDICER Eurorack sequencer. It sends monophonic MIDI to any instrument and
-follows Live's transport and tempo.
+A stochastic melody and rhythm generator for Ableton Live. It sends monophonic
+MIDI to any instrument and follows Live's transport and tempo.
 
-Personal project, VST3, Apple silicon.
+![The Dicey panel](docs/dicey_screenshot.png)
 
-## Build (macOS)
+A personal project: a VST3 plugin for macOS, Windows and Linux.
 
-You need the Xcode command line tools and CMake.
+## Building
+
+The project is self-contained. CMake downloads JUCE 8.0.9, which includes the
+VST3 SDK, the first time you configure, so there's nothing else to fetch by hand.
+
+**Every platform needs:**
+
+- CMake 3.22 or newer
+- Git
+- A C++20 compiler (see each platform below)
+- An internet connection for the first configure
+
+Every build has the same three steps: configure, build, test. The first
+configure takes a few minutes while JUCE downloads; after that, builds are
+incremental.
+
+### macOS
+
+You need the Xcode command line tools and CMake:
 
 ```sh
-cd ~/Projects/melodicer
+xcode-select --install
+brew install cmake          # or the installer from cmake.org
+```
+
+Then build:
+
+```sh
+cd path/to/dicey
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release -j
 ```
 
-The first configure downloads JUCE 8.0.9, which takes a minute or two. The
-build installs the plugin to `~/Library/Audio/Plug-Ins/VST3/Dicey.vst3`
-automatically.
+The build installs the plugin to `~/Library/Audio/Plug-Ins/VST3/Dicey.vst3`.
 
-To run the engine tests:
+- It builds for your Mac's own processor, Apple silicon or Intel. For a
+  universal binary, add `-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"` to the
+  configure step.
+- Near the end of the build you'll see lines like *"Replacing invalid signature
+  with ad-hoc signature"*. They're normal: JUCE re-signs the plugin after adding
+  its metadata. An ad-hoc signature is all you need on your own machine.
+
+### Windows
+
+You need:
+
+- **Visual Studio 2022** (Community is fine) with the **Desktop development
+  with C++** workload. It includes a recent CMake.
+- **Git for Windows**.
+
+Open **Developer PowerShell for VS 2022**, then:
+
+```powershell
+cd path\to\dicey
+cmake -B build -G "Visual Studio 17 2022" -A x64
+cmake --build build --config Release
+```
+
+The plugin is built to `build\Dicey_artefacts\Release\VST3\Dicey.vst3`. That's
+a folder; copy the whole folder into `C:\Program Files\Common Files\VST3`.
+
+To have the build copy it there for you, run the terminal as Administrator and
+add `-DDICEY_COPY_PLUGIN=ON` to the configure step. Writing to that folder needs
+administrator rights, which is why the copy is off by default on Windows.
+
+### Linux
+
+Ableton Live doesn't run on Linux, but the plugin works in any VST3 host that
+can route a plugin's MIDI output: Bitwig Studio, REAPER, Ardour and others.
+
+You need GCC 11+ or Clang 14+. On Debian or Ubuntu, install the toolchain and
+JUCE's dependencies:
 
 ```sh
-cmake --build build --target DiceyEngineTests && ./build/DiceyEngineTests
+sudo apt install build-essential cmake git pkg-config \
+    libasound2-dev libfreetype-dev libfontconfig1-dev libgl1-mesa-dev \
+    libx11-dev libxcomposite-dev libxcursor-dev libxext-dev \
+    libxinerama-dev libxrandr-dev libxrender-dev
 ```
+
+On other distributions, install the equivalent `-devel` packages.
+
+Then build:
+
+```sh
+cd path/to/dicey
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+```
+
+The build installs the plugin to `~/.vst3/Dicey.vst3`.
+
+### Running the tests
+
+The engine tests are built along with the plugin. They're plain C++ with no
+JUCE, and they run on any platform:
+
+```sh
+ctest --test-dir build -C Release --output-on-failure
+```
+
+### Build options
+
+| Option | Default | What it does |
+|---|---|---|
+| `DICEY_COPY_PLUGIN` | `ON` (`OFF` on Windows) | Copy the plugin into the system VST3 folder after each build |
+| `DICEY_JUCE_DIR` | *(empty)* | Use a local JUCE checkout instead of downloading one. Useful offline; it must be JUCE 8.0.9 |
+| `CMAKE_OSX_ARCHITECTURES` | your Mac's processor | `"arm64;x86_64"` builds a universal binary |
+
+Pass any of these at configure time, for example
+`cmake -B build -DDICEY_JUCE_DIR=/path/to/JUCE`.
+
+### Building in the cloud (GitHub Actions)
+
+`.github/workflows/build.yml` builds the plugin on GitHub's machines. It's the
+easy way to get a Windows build from a Mac. It only runs when you start it:
+
+1. Push the repo to GitHub.
+2. Go to the **Actions** tab, choose **Build plugin**, then **Run workflow**.
+3. Tick the platforms you want and press **Run workflow**.
+4. When the run finishes, open it. The plugins are listed under **Artifacts**
+   at the bottom of the summary page, and GitHub keeps them for 30 days.
+
+Each platform takes several minutes, and the first run takes a little longer
+while it downloads JUCE. Public repos build for free; private repos use the
+build minutes included with your GitHub plan.
+
+To install a downloaded build:
+
+- **Windows**: unzip it and copy the `Dicey.vst3` folder into
+  `C:\Program Files\Common Files\VST3`.
+- **macOS**: unzip it, move `Dicey.vst3` into `~/Library/Audio/Plug-Ins/VST3`,
+  then run:
+
+  ```sh
+  xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/Dicey.vst3
+  ```
+
+  macOS marks downloaded plugins as quarantined, and the build isn't signed
+  with an Apple developer certificate, so without this step the DAW refuses
+  to load it.
+- **Linux**: `tar -xzf Dicey-*.tar.gz -C ~/.vst3`
 
 ## Using it in Live
 
-1. **Preferences → Plug-Ins**: turn on *Use VST3 Plug-in System Folders*, then
-   rescan. Dicey shows up under Plug-Ins → Taddei.
+1. **Preferences → Plug-Ins** (on Windows, **Options → Preferences →
+   Plug-Ins**): turn on *Use VST3 Plug-in System Folders*, then rescan. Dicey
+   shows up under Plug-Ins → Taddei.
 2. Drop **Dicey** on a MIDI track and press play. You'll hear the built-in test
    tone.
 3. To drive a real instrument, create a second MIDI track with your synth on it.
@@ -41,7 +166,7 @@ Dicey only runs while Live's transport is playing.
 
 ## Controls
 
-**Rhythm**: these four knobs work like the hardware's.
+**Rhythm**: the four knobs along the top.
 - **NOTE VALUE**: the base rhythm, from 1 to 1/32, including 1/4T and 1/8T.
 - **VARIATION**: randomly brings in other note values. Turn left for longer
   values, right for shorter, and leave it at the centre for off. Row 2–3 of the
@@ -95,24 +220,19 @@ pattern a step is one beat.
 
 Every control can be automated from Live.
 
-## Differences from the hardware
+## Behaviour notes
 
-- Dicey follows Live's transport. There is no free-running internal clock and
-  no TAP.
-- There are no CV or gate inputs. Use Live automation or MIDI mapping on any
-  parameter instead.
-- Only the sequencer mode is included. The quantizer modes and Seq + Gate are
-  left out.
-- There is no 16-slot pattern memory. Live sets and presets keep the full
-  state, including the dice.
-- The extras are new: velocity, gate length, scale presets, pattern lengths
-  longer than one bar, and the test tone.
+- Dicey follows Live's transport and tempo. It has no clock of its own and only
+  runs while Live is playing.
+- Every parameter can be automated or MIDI-mapped in Live.
+- Live sets and presets keep the full state, including the dice.
 - Realtime mode is deterministic for a given song position, so bouncing the same
   section twice gives the same notes.
 
 ## Layout
 
 ```
+.github/workflows/build.yml  on-demand cloud builds for Windows, macOS and Linux
 Source/Engine/DiceEngine.h   the generator and scheduler (pure C++, unit tested)
 Source/PluginProcessor.*     parameters, Live transport, MIDI out, test tone, state
 Source/PluginEditor.*        the panel
