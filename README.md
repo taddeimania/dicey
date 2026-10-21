@@ -145,23 +145,6 @@ ctest --test-dir build -C Release --output-on-failure
 Pass any of these at configure time, for example
 `cmake -B build -DDICEY_JUCE_DIR=/path/to/JUCE`.
 
-### Building in the cloud (GitHub Actions)
-
-`.github/workflows/build.yml` builds the plugin on GitHub's machines. It's the
-easy way to get a Windows build from a Mac. It only runs when you start it:
-
-1. Push the repo to GitHub.
-2. Go to the **Actions** tab, choose **Build plugin**, then **Run workflow**.
-3. Tick the platforms you want and press **Run workflow**.
-4. When the run finishes, open it. The plugins are listed under **Artifacts**
-   at the bottom of the summary page, and GitHub keeps them for 30 days.
-
-Each platform takes several minutes, and the first run takes a little longer
-while it downloads JUCE. Public repos build for free; private repos use the
-build minutes included with your GitHub plan.
-
-Install the downloads the same way as a release; see [Download](#download).
-
 ## Using it in a DAW
 
 Dicey is a VST3 *instrument* that outputs MIDI rather than sound, apart from
