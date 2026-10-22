@@ -267,4 +267,18 @@ Source/PluginProcessor.*     parameters, host transport, MIDI out, test tone, st
 Source/PluginEditor.*        the panel
 Source/UI/Widgets.*          knobs, faders, buttons, LEDs, step ring, table
 Tests/EngineTests.cpp        engine tests
+LICENSE                      GNU AGPLv3
 ```
+
+## License
+
+Copyright (C) 2026 Taddei
+
+Dicey is free software: you can redistribute it and/or modify it under the
+terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version. It is distributed in the hope that it will be useful, but
+without any warranty; see [LICENSE](LICENSE) for the full text.
+
+Dicey is built on [JUCE](https://juce.com), used under its AGPLv3
+open-source licence, together with the VST3 SDK that JUCE includes.
