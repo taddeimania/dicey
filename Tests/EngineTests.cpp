@@ -30,7 +30,7 @@ struct Msg
 
 // Run the sequencer over `beats` at the given tempo in blocks and collect MIDI.
 static std::vector<Msg> run (Sequencer& seq, double beats, double bpm = 120.0, double sr = 48000.0,
-                             int block = 512, double startPpq = 0.0)
+                             int block = 512, double startPpq = 0.0, double rate = 1.0)
 {
     std::vector<Msg> out;
     const double bps   = bpm / (60.0 * sr);
@@ -43,6 +43,7 @@ static std::vector<Msg> run (Sequencer& seq, double beats, double bpm = 120.0, d
         b.bpm        = bpm;
         b.sampleRate = sr;
         b.numSamples = (int) std::min<long long> (block, total - s);
+        b.rate       = rate;
         seq.process (b, [&] (int off, bool on, int note, int vel) { out.push_back ({ s + off, on, note, vel }); });
     }
     return out;
@@ -411,11 +412,78 @@ static void testStressMonophony()
         seq.setParams (p);
         seq.setSeeds ({ trial, trial * 7 + 1, r (61) > 0.5f, r (62) > 0.5f });
         const double bpm = 60.0 + r (63) * 140.0;
-        auto out = run (seq, 16.0, bpm, 44100.0, 64 + (int) (r (64) * 900));
+        const double rates[] = { 2.0, 1.0, 0.5, 0.25, 0.125, 1.0 / 16.0, 1.0 / 32.0 };
+        auto out = run (seq, 16.0, bpm, 44100.0, 64 + (int) (r (64) * 900), 0.0, rates[(int) (r (65) * 7)]);
         CHECK (isMonophonic (out));
         for (auto& x : out)
             if (x.on) CHECK (x.velocity >= 1 && x.velocity <= 127 && x.note >= 0 && x.note <= 127);
     }
+}
+
+static void testClockRate()
+{
+    std::printf ("clock rate slows everything down, aligned to the host\n");
+    Params p; // 1/16 notes, 50% gate
+
+    // At 1/4 rate a 1/16 note lasts a host quarter note: 24000 samples at 120 bpm.
+    Sequencer s4;
+    s4.setParams (p);
+    auto m = run (s4, 16.0, 120.0, 48000.0, 512, 0.0, 0.25);
+    CHECK (countOns (m) == 16);
+    int k = 0;
+    for (auto& x : m)
+        if (x.on)
+            CHECK (x.sample == (long long) k++ * 24000);
+    CHECK (! m[1].on && m[1].sample == 12000); // gate scales too
+    CHECK (isMonophonic (m));
+
+    // At 1/32 a one-bar pattern of 1/16 notes spans 32 host bars.
+    Sequencer s32;
+    s32.setParams (p);
+    CHECK (countOns (run (s32, 32.0, 120.0, 48000.0, 512, 0.0, 1.0 / 32.0)) == 4);
+
+    // x2 doubles the speed.
+    Sequencer s2;
+    s2.setParams (p);
+    CHECK (countOns (run (s2, 4.0, 120.0, 48000.0, 512, 0.0, 2.0)) == 32);
+
+    // Starting mid-song at a slow rate lands on the same notes as playing through.
+    p.semitone.fill (1.0f);
+    p.rangeHi = 1.0f;
+    p.rest    = 0.3f;
+    Sequencer a;
+    a.setParams (p);
+    auto full = run (a, 32.0, 120.0, 48000.0, 512, 0.0, 0.25);
+    Sequencer b;
+    b.setParams (p);
+    auto tail = run (b, 16.0, 120.0, 48000.0, 512, 16.0, 0.25);
+    std::vector<int> fullTail, startTail;
+    for (auto& x : full) if (x.on && x.sample >= 384000) fullTail.push_back (x.note);
+    for (auto& x : tail) if (x.on) startTail.push_back (x.note);
+    CHECK (! fullTail.empty() && fullTail == startTail);
+}
+
+static void testRestartOnHostBeatAtSlowRate()
+{
+    std::printf ("restart at a slow rate waits only for the next host beat\n");
+    Params p;
+    Sequencer seq;
+    seq.setParams (p);
+    std::vector<Msg> out;
+    const double bps = 120.0 / (60.0 * 48000.0);
+    bool requested = false;
+    for (long long smp = 0; smp < 4 * 24000; smp += 512)
+    {
+        if (! requested && smp >= 30000) { seq.requestRestart(); requested = true; } // ~1.25 host beats
+        BlockInfo b { true, smp * bps, 120.0, 48000.0, 512, 1.0 / 16.0 };
+        seq.process (b, [&] (int o, bool on, int n, int v) { out.push_back ({ smp + o, on, n, v }); });
+    }
+    // Notes at 1/16 rate are a whole host bar apart: one at 0, then the restart
+    // fires a fresh first step on host beat 2 (sample 48000).
+    std::vector<long long> ons;
+    for (auto& x : out) if (x.on) ons.push_back (x.sample);
+    CHECK (ons.size() == 2 && ons[0] == 0 && ons[1] == 48000);
+    CHECK (isMonophonic (out));
 }
 
 int main()
@@ -435,6 +503,8 @@ int main()
     testJumpAndMidSongStart();
     testMute();
     testStressMonophony();
+    testClockRate();
+    testRestartOnHostBeatAtSlowRate();
 
     std::printf ("\n%d checks, %d failures\n", checks, failures);
     return failures == 0 ? 0 : 1;

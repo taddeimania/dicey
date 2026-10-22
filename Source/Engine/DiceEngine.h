@@ -18,6 +18,8 @@
 //     pattern that loops.
 //   * Output is strictly monophonic MIDI: a note-off is always sent before the
 //     next note-on.
+//   * A clock rate can slow the whole engine down relative to the host
+//     (BlockInfo::rate), e.g. 0.25 plays everything four times slower.
 
 #pragma once
 
@@ -347,6 +349,7 @@ struct BlockInfo
     double bpm        = 120.0;
     double sampleRate = 48000.0;
     int    numSamples = 0;
+    double rate       = 1.0;   // Dicey beats per host beat: 1 = in time, 0.25 = four times slower
 };
 
 struct Seeds
@@ -416,8 +419,11 @@ public:
             return;
         }
 
-        const double bps = b.bpm / (60.0 * b.sampleRate); // beats per sample
-        const double p0  = b.ppq;
+        // Everything below runs in Dicey's own beats: the host position scaled by
+        // the clock rate. The pattern stays aligned to the song at any rate.
+        const double rate = b.rate > 0.0 ? b.rate : 1.0;
+        const double bps  = b.bpm * rate / (60.0 * b.sampleRate); // beats per sample
+        const double p0   = b.ppq * rate;
         const double p1  = p0 + b.numSamples * bps;
 
         const bool jumped = wasPlaying && std::abs (p0 - expectedPpq) > std::max (1.0e-3, 4.0 * bps);
@@ -448,7 +454,8 @@ public:
 
         if (restartRequested)
         {
-            restartAt        = std::ceil (p0 - 1.0e-9);
+            // Restart on the next host beat, however slow Dicey's clock is.
+            restartAt        = std::ceil (b.ppq - 1.0e-9) * rate;
             restartRequested = false;
         }
 

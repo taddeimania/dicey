@@ -492,6 +492,53 @@ void OptionTable::mouseExit (const MouseEvent&)
 }
 
 // ---------------------------------------------------------------------------
+// ChoiceDisplay
+// ---------------------------------------------------------------------------
+void ChoiceDisplay::refresh()
+{
+    if (getText != nullptr && getText() != shown)
+        repaint();
+}
+
+void ChoiceDisplay::paint (Graphics& g)
+{
+    const auto r = getLocalBounds().toFloat().reduced (1.0f);
+    g.setColour (Colour (0xff0b0f0e));
+    g.fillRoundedRectangle (r, 5.0f);
+    g.setColour (isMouseOver() ? colours::accent.withAlpha (0.85f) : Colour (0xff4a4a4c));
+    g.drawRoundedRectangle (r, 5.0f, 1.5f);
+
+    if (getText != nullptr)
+        shown = getText();
+    g.setColour (colours::accent);
+    g.setFont (panelFont (r.getHeight() * 0.56f));
+    g.drawText (shown, r.withTrimmedRight (14.0f), Justification::centred, false);
+
+    // Drop-down hint
+    const float sz = 4.5f;
+    const float cx = r.getRight() - 11.0f, cy = r.getCentreY();
+    Path tri;
+    tri.addTriangle (cx - sz, cy - sz * 0.5f, cx + sz, cy - sz * 0.5f, cx, cy + sz * 0.7f);
+    g.setColour (colours::inkDim);
+    g.fillPath (tri);
+}
+
+void ChoiceDisplay::mouseDown (const MouseEvent&)
+{
+    if (! buildMenu)
+        return;
+    PopupMenu m;
+    buildMenu (m);
+    auto safe = Component::SafePointer<ChoiceDisplay> (this);
+    m.showMenuAsync (PopupMenu::Options().withTargetComponent (this).withMinimumWidth (getWidth()),
+                     [safe] (int result)
+                     {
+                         if (safe != nullptr && result != 0 && safe->onChoose)
+                             safe->onChoose (result);
+                     });
+}
+
+// ---------------------------------------------------------------------------
 // Display
 // ---------------------------------------------------------------------------
 void Display::setText (const String& big, const String& small)

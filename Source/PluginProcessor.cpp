@@ -151,6 +151,7 @@ void DiceyProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::MidiBu
     BlockInfo info;
     info.numSamples = numSamples;
     info.sampleRate = getSampleRate();
+    info.rate       = ids::clockRateFromIndex (juce::roundToInt (get (ids::clockRate)));
     if (auto* ph = getPlayHead())
     {
         if (auto pos = ph->getPosition())

@@ -28,6 +28,7 @@ inline constexpr const char* root           = "root";
 inline constexpr const char* channel        = "channel";
 inline constexpr const char* testTone       = "testTone";
 inline constexpr const char* toneLevel      = "toneLevel";
+inline constexpr const char* clockRate      = "clockRate";
 
 inline juce::String semitone (int i) { return "semi" + juce::String (i); }
 inline juce::String varAllowed (int i) { return "var" + juce::String (i); }
@@ -51,6 +52,28 @@ inline const juce::StringArray& barNames()
 }
 
 inline int barsFromIndex (int i) { return i == 2 ? 4 : (i == 1 ? 2 : 1); }
+
+// Clock: how fast Dicey runs relative to the host. "\xc3\x97" is the multiply
+// sign and "\xc3\xb7" the divide sign (UTF-8).
+inline const juce::StringArray& clockRateNames()
+{
+    static const juce::StringArray n {
+        juce::String::fromUTF8 ("\xc3\x97" "2"),  juce::String::fromUTF8 ("\xc3\x97" "1"),
+        juce::String::fromUTF8 ("\xc3\xb7" "2"),  juce::String::fromUTF8 ("\xc3\xb7" "4"),
+        juce::String::fromUTF8 ("\xc3\xb7" "8"),  juce::String::fromUTF8 ("\xc3\xb7" "16"),
+        juce::String::fromUTF8 ("\xc3\xb7" "32")
+    };
+    return n;
+}
+
+inline constexpr int clockRateDefaultIndex = 1; // x1
+
+// Dicey beats per host beat for each clock setting.
+inline double clockRateFromIndex (int i)
+{
+    static constexpr double r[] { 2.0, 1.0, 0.5, 0.25, 0.125, 1.0 / 16.0, 1.0 / 32.0 };
+    return r[juce::jlimit (0, 6, i)];
+}
 inline int baseNoteFromOctaveIndex (int i) { return 12 * (juce::jlimit (0, 4, i) + 1); } // index 0 = MIDI 12 = C-1 in Live
 } // namespace dicey::ids
 
@@ -121,6 +144,8 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { ids::octave, 1 }, "Octave", ids::octaveNames(), 1));
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { ids::root, 1 }, "Scale Root", ids::noteNames(), 0));
     layout.add (std::make_unique<AudioParameterInt> (ParameterID { ids::channel, 1 }, "MIDI Channel", 1, 16, 1));
+    layout.add (std::make_unique<AudioParameterChoice> (ParameterID { ids::clockRate, 1 }, "Clock",
+        ids::clockRateNames(), ids::clockRateDefaultIndex));
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { ids::testTone, 1 }, "Test Tone", true));
     layout.add (std::make_unique<AudioParameterFloat> (ParameterID { ids::toneLevel, 1 }, "Test Tone Level",
         NormalisableRange<float> (0.0f, 1.0f), 0.5f, pct));

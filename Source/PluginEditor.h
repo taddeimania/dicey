@@ -76,6 +76,7 @@ private:
 
     dicey::ui::OptionTable table;
     dicey::ui::Display display;
+    dicey::ui::ChoiceDisplay clockDisplay;
 
     std::vector<std::unique_ptr<SliderAttachment>> attachments;
 

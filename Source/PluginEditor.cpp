@@ -85,9 +85,24 @@ DiceyPanel::DiceyPanel (DiceyProcessor& p) : proc (p), apvts (p.apvts)
     addKnob (velRandom,  ids::velRandom,  125.0f, 735.0f, 24.0f, "Random velocity spread");
     addKnob (gateLength, ids::gateLength, 200.0f, 735.0f, 24.0f, "Gate length of non-legato notes");
     addKnob (toneLevel,  ids::toneLevel,  275.0f, 735.0f, 24.0f, "Test tone volume");
-    addKnob (octave,     ids::octave,     87.0f, 860.0f, 24.0f, "Octave at the bottom of the range");
-    addKnob (root,       ids::root,       162.0f, 860.0f, 24.0f, "Root used by the SCALE presets in the table");
-    addKnob (channel,    ids::channel,    237.0f, 860.0f, 24.0f, "MIDI output channel");
+    addKnob (octave,     ids::octave,     50.0f, 860.0f, 24.0f, "Octave at the bottom of the range");
+    addKnob (root,       ids::root,       125.0f, 860.0f, 24.0f, "Root used by the SCALE presets in the table");
+    addKnob (channel,    ids::channel,    200.0f, 860.0f, 24.0f, "MIDI output channel");
+
+    // Clock: run slower (or faster) than the host
+    addAndMakeVisible (clockDisplay);
+    clockDisplay.setBounds (Rectangle<float> (66.0f, 38.0f).withCentre ({ 275.0f, 860.0f }).toNearestInt());
+    clockDisplay.setTooltip (String::fromUTF8 ("CLOCK: how fast Dicey runs against the DAW's tempo. "
+                                               "\xc3\xb7" "4 plays everything four times slower, "
+                                               "\xc3\x97" "2 twice as fast."));
+    clockDisplay.getText = [this] { return ids::clockRateNames()[roundToInt (getParam (ids::clockRate))]; };
+    clockDisplay.buildMenu = [this] (PopupMenu& m)
+    {
+        const int cur = roundToInt (getParam (ids::clockRate));
+        for (int i = 0; i < ids::clockRateNames().size(); ++i)
+            m.addItem (i + 1, ids::clockRateNames()[i], true, i == cur);
+    };
+    clockDisplay.onChoose = [this] (int r) { setParam (ids::clockRate, (float) (r - 1)); };
     for (auto* k : { &octave, &root, &channel })
         k->setMouseDragSensitivity (140);
 
@@ -364,10 +379,16 @@ void DiceyPanel::timerCallback()
     else if (muted)                        status = "MUTED";
     else if (getParam (ids::lock) > 0.5f)  status = "LOCKED";
     else                                   status = "CH " + String (roundToInt (getParam (ids::channel)));
+
+    // Show a non-default clock in the readout too, so a slowed-down Dicey is obvious.
+    const int clockIndex = roundToInt (getParam (ids::clockRate));
+    if (running && clockIndex != ids::clockRateDefaultIndex)
+        status << "  " << ids::clockRateNames()[clockIndex];
     display.setText (noteName (note), status);
 
     if (blinkCounter % 3 == 0)
         table.refresh();
+    clockDisplay.refresh();
 }
 
 // ---------------------------------------------------------------------------
@@ -534,7 +555,7 @@ void DiceyPanel::paintBottom (Graphics& g) const
     // Extras rail labels & small arcs
     struct K { float x, y; const char* name; };
     const K ks[] = { { 50, 735, "VELOCITY" }, { 125, 735, "VEL RAND" }, { 200, 735, "GATE" }, { 275, 735, "LEVEL" },
-                     { 87, 860, "OCTAVE" }, { 162, 860, "ROOT" }, { 237, 860, "CHANNEL" } };
+                     { 50, 860, "OCTAVE" }, { 125, 860, "ROOT" }, { 200, 860, "CHANNEL" } };
     constexpr float start = MathConstants<float>::pi * 1.25f;
     constexpr float end   = MathConstants<float>::pi * 2.75f;
     for (const auto& k : ks)
@@ -542,6 +563,7 @@ void DiceyPanel::paintBottom (Graphics& g) const
         strokeArc (g, k.x, k.y, 32.0f, start, end, 3.0f, colours::ink);
         drawLabel (g, k.name, k.x, k.y + 44.0f, 14.0f);
     }
+    drawLabel (g, "CLOCK", 275.0f, 904.0f, 14.0f);
 
     // Rail divider
     g.setColour (colours::ink.withAlpha (0.25f));

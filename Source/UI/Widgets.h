@@ -202,6 +202,28 @@ private:
 };
 
 // ---------------------------------------------------------------------------
+// Click-to-choose value display (same idea as the sibling plugins' rail)
+// ---------------------------------------------------------------------------
+class ChoiceDisplay final : public juce::Component, public juce::SettableTooltipClient
+{
+public:
+    std::function<juce::String()> getText;
+    std::function<void (juce::PopupMenu&)> buildMenu;
+    std::function<void (int)> onChoose;
+
+    void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseEnter (const juce::MouseEvent&) override { repaint(); }
+    void mouseExit (const juce::MouseEvent&) override { repaint(); }
+
+    // Repaints only when the shown text changes; cheap to call from a timer.
+    void refresh();
+
+private:
+    juce::String shown;
+};
+
+// ---------------------------------------------------------------------------
 // Small LCD-style readout
 // ---------------------------------------------------------------------------
 class Display final : public juce::Component

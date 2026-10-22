@@ -246,13 +246,18 @@ pattern a step is one beat.
 - **GATE**: the length of non-legato notes.
 - **LEVEL**: the test tone's volume.
 - **OCTAVE**, **ROOT** and MIDI **CHANNEL**.
+- **CLOCK**: how fast Dicey runs against your DAW's tempo. Click it to choose
+  from ×2 to ÷32. At ÷4 everything plays four times slower: notes, loop and
+  step ring. The note readout shows the setting whenever it isn't ×1.
 
 Every control can be automated from your DAW.
 
 ## Behaviour notes
 
-- Dicey follows the host's transport and tempo. It has no clock of its own and
-  only runs while the DAW is playing.
+- Dicey follows the host's transport and tempo, scaled by CLOCK. It has no
+  clock of its own and only runs while the DAW is playing.
+- At any CLOCK setting the pattern stays lined up with the song, and restart
+  still happens on the next beat of the DAW.
 - Every parameter can be automated or MIDI-mapped from the host.
 - Projects and presets keep the full state, including the dice.
 - Realtime mode is deterministic for a given song position, so bouncing the same
