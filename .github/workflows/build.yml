@@ -103,6 +103,74 @@ jobs:
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
 
+      # macOS: sign with the Developer ID and notarize, so the plug-in loads without
+      # the quarantine workaround. Needs the secrets MACOS_CERT_P12 (base64 .p12),
+      # MACOS_CERT_PASSWORD, MACOS_SIGN_IDENTITY, NOTARY_KEY_P8 (base64 .p8),
+      # NOTARY_KEY_ID and NOTARY_ISSUER_ID: the same certificate and key as Lathe.
+      # A version tag without them fails here, so every released Mac build is
+      # notarized. Branch builds without them keep the local (ad-hoc) signature,
+      # for testing only. Signs in place, so Package picks up the signed bundles.
+      - name: Sign and notarize (macOS)
+        if: runner.os == 'macOS'
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          if [ -z "$MACOS_CERT_P12" ]; then
+            if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+              echo "::error::Releases must be signed and notarized: the macOS signing secrets are missing."
+              exit 1
+            fi
+            echo "No signing secrets: this branch build keeps its local signature (for testing, not for release)."
+            exit 0
+          fi
+          set -euo pipefail
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          kpass="$(uuidgen)"
+          echo "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$kpass" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$kpass" "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$kpass" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+
+          # Every bundle the build made: VST3, and the AU and standalone app where there are any.
+          shopt -s nullglob
+          bundles=(build/*_artefacts/Release/VST3/*.vst3 build/*_artefacts/Release/AU/*.component build/*_artefacts/Release/Standalone/*.app)
+          if [ ${#bundles[@]} -eq 0 ]; then
+            echo "::error::No plug-in bundles found to sign."
+            exit 1
+          fi
+          for b in "${bundles[@]}"; do
+            codesign --force --timestamp --options runtime --sign "$MACOS_SIGN_IDENTITY" "$b"
+            codesign --verify --strict --verbose=2 "$b"
+          done
+
+          # One submission for all of them, then a ticket stapled to each.
+          echo "$NOTARY_KEY_P8" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+          mkdir -p "$RUNNER_TEMP/notarize"
+          cp -R "${bundles[@]}" "$RUNNER_TEMP/notarize/"
+          ditto -c -k --keepParent "$RUNNER_TEMP/notarize" "$RUNNER_TEMP/notarize.zip"
+          result=$(xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" --wait --output-format json \
+            --key "$RUNNER_TEMP/notary.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID") || true
+          echo "$result"
+          status=$(echo "$result" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status",""))')
+          if [ "$status" != "Accepted" ]; then
+            id=$(echo "$result" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("id",""))')
+            [ -n "$id" ] && xcrun notarytool log "$id" --key "$RUNNER_TEMP/notary.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" || true
+            echo "::error::Notarization wasn't accepted (status: ${status:-unknown})."
+            exit 1
+          fi
+          for b in "${bundles[@]}"; do
+            xcrun stapler staple "$b"
+            xcrun stapler validate "$b"
+          done
+
       # Package the .vst3 ourselves so file permissions and the macOS code
       # signature survive the download.
       - name: Package
