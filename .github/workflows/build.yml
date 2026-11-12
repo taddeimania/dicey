@@ -3,6 +3,12 @@
 # Run it from GitHub: Actions tab -> "Build plugin" -> "Run workflow",
 # tick the platforms you want, and press the green button. When it finishes,
 # the plugins are listed as downloads at the bottom of the run's summary page.
+#
+# Run it on a version tag (v1.2.3) instead of a branch to make a release: all
+# three platforms are built whatever is ticked, then a *draft* GitHub release
+# is created with the archives attached and the text from
+# .github/release-notes.md. Review it on the Releases page and publish.
+# The tag must match project(Dicey VERSION ...) in CMakeLists.txt.
 
 name: Build plugin
 
@@ -39,6 +45,10 @@ jobs:
         shell: bash
         run: |
           entries=()
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo 'matrix={"include":[{"platform":"Windows","os":"windows-latest"},{"platform":"macOS","os":"macos-latest"},{"platform":"Linux","os":"ubuntu-latest"}]}' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [ "${{ inputs.windows }}" = "true" ]; then entries+=('{"platform":"Windows","os":"windows-latest"}'); fi
           if [ "${{ inputs.macos }}" = "true" ];   then entries+=('{"platform":"macOS","os":"macos-latest"}'); fi
           if [ "${{ inputs.linux }}" = "true" ];   then entries+=('{"platform":"Linux","os":"ubuntu-latest"}'); fi
@@ -62,6 +72,15 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+
+      - name: Check the tag matches the version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(sed -n 's/^project(Dicey VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match CMakeLists.txt (VERSION $version). Update project(Dicey VERSION ...), commit, and move the tag."
+            exit 1
+          fi
 
       # JUCE is about 100 MB; keep a copy between runs instead of downloading it every time.
       - name: Restore JUCE
@@ -176,7 +195,8 @@ jobs:
       - name: Package
         run: |
           version=$(sed -n 's/^project(Dicey VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
-          name="Dicey-${version}-${{ matrix.platform }}-${GITHUB_SHA::7}"
+          name="Dicey-${version}-${{ matrix.platform }}"
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then name="${name}-${GITHUB_SHA::7}"; fi
           cd build/Dicey_artefacts/Release/VST3
           case "$RUNNER_OS" in
             Windows) 7z a -tzip "$GITHUB_WORKSPACE/$name.zip" Dicey.vst3 > /dev/null
@@ -190,7 +210,40 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v7
         with:
+          name: ${{ env.ARCHIVE }}
           path: ${{ env.ARCHIVE }}
           archive: false
           if-no-files-found: error
           retention-days: 30
+
+  release:
+    name: Draft release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Collect the builds
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+          skip-decompress: true
+
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -la dist
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* \
+              --draft \
+              --verify-tag \
+              --title "Dicey ${GITHUB_REF_NAME#v}" \
+              --notes-file .github/release-notes.md
+          fi
