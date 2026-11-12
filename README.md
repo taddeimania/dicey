@@ -16,16 +16,9 @@ Download the file for your system from the latest release, then:
 
 - **Windows**: unzip it and copy the `Dicey.vst3` folder into
   `C:\Program Files\Common Files\VST3`.
-- **macOS**: unzip it, move `Dicey.vst3` into `~/Library/Audio/Plug-Ins/VST3`,
-  then run:
-
-  ```sh
-  xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/Dicey.vst3
-  ```
-
-  macOS marks downloaded plugins as quarantined, and the build isn't signed
-  with an Apple developer certificate, so without this step the DAW refuses
-  to load it.
+- **macOS**: unzip it and move `Dicey.vst3` into `~/Library/Audio/Plug-Ins/VST3`.
+  The build is signed and notarised by Apple, so your DAW loads it straight
+  away.
 - **Linux**: `tar -xzf Dicey-*.tar.gz -C ~/.vst3`
 
 Then rescan plug-ins in your DAW. [Using it in a DAW](#using-it-in-a-daw)
